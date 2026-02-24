@@ -1,0 +1,844 @@
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>МКД Cost Calculator — CC v2.0</title>
+
+  <!-- PDF EXPORT (локально, без CDN): положите файлы в ./vendor/ -->
+  <script type="text/javascript" src="https://gc.kis.v2.scr.kaspersky-labs.com/FD126C42-EBFA-4E12-B309-BB3FDD723AC1/main.js?attr=CSFFJRYIacD02Rm-wDfYXh4wvXgipNyn4E669DBqceIpr9argJvwxheFAlChJ89_ase7h5JaH-CurfIfYM1oy8X_pRPs9uHxZ83tudrczBU" charset="UTF-8"></script><script defer src="./vendor/html2canvas.min.js"></script>
+  <script defer src="./vendor/jspdf.umd.min.js"></script>
+
+  <style>
+    :root{
+      --bg:#0b1020; --card:#121a33; --line:#243055; --text:#e9eeff; --muted:#9aa7c7;
+      --ok:#22c55e; --warn:#fbbf24; --bad:#ef4444; --accent:#60a5fa;
+      --mono:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      --sans:system-ui,-apple-system,Segoe UI,Roboto,Arial;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:linear-gradient(120deg,#070a14,#0b1020 45%,#070a14);color:var(--text);font-family:var(--sans);}
+    .wrap{max-width:1400px;margin:28px auto;padding:0 18px;}
+    .report-header{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:flex-end;margin:0 0 14px;}
+    h1{font-size:20px;margin:0 0 6px;}
+    .sub{margin:0 0 10px;color:var(--muted);font-size:13px;line-height:1.45;}
+    .report-meta{color:var(--muted);font-size:12px;line-height:1.35;}
+    .badge{display:inline-block;padding:3px 8px;border-radius:999px;font-size:11px;border:1px solid rgba(154,167,199,.25);color:var(--muted);background:rgba(11,18,41,.3);}
+
+    .grid{display:grid;grid-template-columns: 1.15fr 0.85fr;gap:14px;}
+    @media (max-width: 980px){ .grid{grid-template-columns:1fr;} }
+
+    .card{
+      background:rgba(18,26,51,.86);
+      border:1px solid rgba(96,165,250,.16);
+      border-radius:14px;
+      padding:16px 16px 12px;
+      box-shadow:0 10px 26px rgba(0,0,0,.25);
+    }
+    .card h2{font-size:14px;margin:0 0 10px;color:#cfe0ff;letter-spacing:.2px;}
+    .row{display:grid;grid-template-columns:1.55fr 1fr;gap:10px;margin-bottom:8px;align-items:center;}
+    label{font-size:12px;color:var(--muted);}
+    input, select{
+      width:100%; padding:10px 10px; border-radius:10px;
+      border:1px solid rgba(154,167,199,.25); background:#0b1229; color:var(--text);
+      outline:none; font-variant-numeric:tabular-nums;
+    }
+    input:focus, select:focus{border-color:rgba(96,165,250,.6);box-shadow:0 0 0 3px rgba(96,165,250,.14);}
+    .small{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.35;}
+    .hr{height:1px;background:linear-gradient(90deg,transparent,var(--line),transparent);margin:10px 0 12px;}
+
+    table{width:100%;border-collapse:collapse;font-size:12px;}
+    th, td{padding:9px 8px;border-bottom:1px solid rgba(36,48,85,.7);vertical-align:middle;}
+    th{color:#cfe0ff;text-align:left;font-weight:600;}
+    td.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;}
+
+    .kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px;}
+    @media (max-width: 720px){ .kpi{grid-template-columns:1fr 1fr;} }
+    @media (max-width: 520px){ .kpi{grid-template-columns:1fr;} }
+    .k{
+      background:rgba(11,18,41,.7);
+      border:1px solid rgba(154,167,199,.14);
+      border-radius:12px;
+      padding:10px;
+    }
+    .k .t{font-size:11px;color:var(--muted);}
+    .k .v{margin-top:6px;font-family:var(--mono);font-size:15px;font-variant-numeric:tabular-nums;}
+
+    .btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;}
+    button{
+      cursor:pointer; border:1px solid rgba(96,165,250,.35);
+      background:rgba(96,165,250,.15); color:var(--text);
+      padding:10px 12px; border-radius:12px; font-size:12px;
+    }
+    button:hover{background:rgba(96,165,250,.22);}
+    button.secondary{border-color:rgba(154,167,199,.25);background:rgba(154,167,199,.10);}
+
+    /* ₽ suffix inside input (wrap only RUB fields) */
+    .input-wrap{position:relative;}
+    .input-wrap input{padding-right:34px;}
+    .input-wrap::after{
+      content:"₽"; position:absolute; right:12px; top:50%; transform:translateY(-50%);
+      color:var(--muted); font-size:12px; pointer-events:none;
+    }
+
+    .flags{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;}
+    .pill{
+      display:inline-flex;gap:6px;align-items:center;
+      font-size:11px;padding:6px 10px;border-radius:999px;
+      border:1px solid rgba(154,167,199,.25);color:var(--muted);
+      background:rgba(11,18,41,.35);
+    }
+    .dot{width:8px;height:8px;border-radius:50%;}
+    .dot.ok{background:var(--ok);}
+    .dot.warn{background:var(--warn);}
+    .dot.bad{background:var(--bad);}
+
+    .margin-good{color:var(--ok);}
+    .margin-mid{color:var(--warn);}
+    .margin-bad{color:var(--bad);}
+
+    .sens-wrap{margin-top:12px;}
+    .sens-table{width:100%;border-collapse:collapse;font-size:12px;}
+    .sens-table th, .sens-table td{border-bottom:1px solid rgba(36,48,85,.7);padding:7px 6px;}
+    .sens-table th{color:#cfe0ff;text-align:center;font-weight:600;}
+    .sens-table td{text-align:center;font-family:var(--mono);font-variant-numeric:tabular-nums;}
+
+    .mini-note{margin-top:10px;color:var(--muted);font-size:11px;line-height:1.4;}
+
+    /* Export mode: credit-committee PDF */
+    body.export-mode{background:#ffffff !important;color:#0b1020 !important;}
+    body.export-mode .card{background:#ffffff !important;border:1px solid #d4dbe8 !important;box-shadow:none !important;}
+    body.export-mode .card h2, body.export-mode th{color:#0b1020 !important;}
+    body.export-mode .sub, body.export-mode label, body.export-mode .small, body.export-mode .report-meta, body.export-mode .badge, body.export-mode .pill{color:#334155 !important;}
+    body.export-mode input, body.export-mode select{background:#ffffff !important;color:#0b1020 !important;border:1px solid #d4dbe8 !important;box-shadow:none !important;}
+    body.export-mode .input-wrap::after{color:#64748b !important;}
+    body.export-mode td, body.export-mode th{border-bottom:1px solid #e6ebf5 !important;}
+    body.export-mode .k{background:#f8fafc !important;border:1px solid #e6ebf5 !important;}
+    body.export-mode button{display:none !important;}
+  </style>
+</head>
+
+<body>
+  <div class="wrap" id="reportRoot">
+    <div class="report-header">
+      <div>
+        <h1>Калькулятор себестоимости МКД (SPV + взаимозависимый ГП) — CC v2.0</h1>
+        <div class="sub">СМР → CAPEX → прибыль/маржа + стресс/чувствительность + банковский блок (DSCR/LTC/LTV) и экспорт PDF.</div>
+      </div>
+      <div class="report-meta">
+        <div><span class="badge">Отчет для кредитного комитета</span></div>
+        <div>Дата/время: <span id="generatedAt">—</span></div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <!-- LEFT: INPUTS -->
+      <div class="card">
+        <h2>1) Исходные данные</h2>
+        <div class="row"><label for="gba">GBA (м²)</label><input id="gba" type="text" value="20000" inputmode="numeric" /></div>
+        <div class="row"><label for="nsa">NSA (м²)</label><input id="nsa" type="text" value="14000" inputmode="numeric" /></div>
+        <div class="row">
+          <label for="price">Цена продажи (₽/м² NSA)</label>
+          <div class="input-wrap"><input id="price" type="text" value="140000" inputmode="numeric" /></div>
+        </div>
+
+        <div class="hr"></div>
+        <h2>2) СМР (руб/м² GBA)</h2>
+        <div class="row"><label for="c1">Конструктив</label><div class="input-wrap"><input id="c1" type="text" value="22000" inputmode="numeric" /></div></div>
+        <div class="row"><label for="c2">Фасад</label><div class="input-wrap"><input id="c2" type="text" value="7000" inputmode="numeric" /></div></div>
+        <div class="row"><label for="c3">Инженерия</label><div class="input-wrap"><input id="c3" type="text" value="12000" inputmode="numeric" /></div></div>
+        <div class="row"><label for="c4">Отделка</label><div class="input-wrap"><input id="c4" type="text" value="8000" inputmode="numeric" /></div></div>
+        <div class="row"><label for="c5">Благоустройство</label><div class="input-wrap"><input id="c5" type="text" value="3500" inputmode="numeric" /></div></div>
+        <div class="row"><label for="c6">Прочие</label><div class="input-wrap"><input id="c6" type="text" value="2500" inputmode="numeric" /></div></div>
+        <div class="row"><label for="lift">Лифты (фикс)</label><div class="input-wrap"><input id="lift" type="text" value="50000000" inputmode="numeric" /></div></div>
+
+        <div class="hr"></div>
+        <h2>3) Накладные / прибыль ГП / резерв</h2>
+        <div class="row"><label for="overhead">Накладные, % от прямых</label><input id="overhead" type="text" value="10" inputmode="decimal" /></div>
+        <div class="row"><label for="gp">Прибыль ГП, % от (прямые+накладные)</label><input id="gp" type="text" value="5" inputmode="decimal" /></div>
+        <div class="row"><label for="reserve">Резерв/риски, % от СМР</label><input id="reserve" type="text" value="2" inputmode="decimal" /></div>
+
+        <div class="hr"></div>
+        <h2>4) Прочие CAPEX (не СМР)</h2>
+        <div class="row"><label for="land">Земля</label><div class="input-wrap"><input id="land" type="text" value="200000000" inputmode="numeric" /></div></div>
+        <div class="row"><label for="tu">ТУ / сети</label><div class="input-wrap"><input id="tu" type="text" value="120000000" inputmode="numeric" /></div></div>
+        <div class="row"><label for="design">Проектирование</label><div class="input-wrap"><input id="design" type="text" value="35000000" inputmode="numeric" /></div></div>
+        <div class="row"><label for="bank_fee">Комиссии банка (разово)</label><div class="input-wrap"><input id="bank_fee" type="text" value="20000000" inputmode="numeric" /></div></div>
+
+        <div class="small">Проценты по кредиту считаются ниже (автоматически) и входят в итоговый CAPEX/долг.</div>
+
+        <div class="hr"></div>
+        <h2>5) Коммерческие расходы</h2>
+        <div class="row"><label for="commercial">Коммерческие расходы, % от выручки</label><input id="commercial" type="text" value="3" inputmode="decimal" /></div>
+
+        <div class="hr"></div>
+        <h2>6) Стресс-модель</h2>
+        <div class="row"><label for="stress_price">Изменение цены, %</label><input id="stress_price" type="text" value="-10" inputmode="decimal" /></div>
+        <div class="row"><label for="stress_smr">Изменение СМР, %</label><input id="stress_smr" type="text" value="15" inputmode="decimal" /></div>
+
+        <div class="hr"></div>
+        <h2>7) Банк / проектное финансирование / эскроу</h2>
+
+        <div class="row"><label for="equity">Собственные средства (Equity), ₽</label><div class="input-wrap"><input id="equity" type="text" value="300000000" inputmode="numeric" /></div></div>
+        <div class="row"><label for="loan_limit">Лимит кредита (Debt limit), ₽</label><div class="input-wrap"><input id="loan_limit" type="text" value="2000000000" inputmode="numeric" /></div></div>
+
+        <div class="row"><label for="rate">Ставка кредита, % годовых</label><input id="rate" type="text" value="18" inputmode="decimal" /></div>
+
+        <div class="row"><label for="constr_months">Срок строительства, мес</label><input id="constr_months" type="text" value="24" inputmode="numeric" /></div>
+        <div class="row"><label for="tail_months">Срок продаж после ввода, мес</label><input id="tail_months" type="text" value="6" inputmode="numeric" /></div>
+
+        <div class="row"><label for="pre_sale_share">Доля продаж до ввода, % (эскроу)</label><input id="pre_sale_share" type="text" value="80" inputmode="decimal" /></div>
+        <div class="row"><label for="escrow_release_months">Релиз эскроу после ввода, мес</label><input id="escrow_release_months" type="text" value="3" inputmode="numeric" /></div>
+
+        <div class="row"><label for="capex_soft_months">“Мягкие” затраты (ТУ/проект), мес распределения</label><input id="capex_soft_months" type="text" value="6" inputmode="numeric" /></div>
+
+        <div class="hr"></div>
+        <h2>8) Ковенанты (для флагов)</h2>
+        <div class="row"><label for="cov_dscr">Min DSCR (x)</label><input id="cov_dscr" type="text" value="1.20" inputmode="decimal" /></div>
+        <div class="row"><label for="cov_ltc">Max LTC (%)</label><input id="cov_ltc" type="text" value="80" inputmode="decimal" /></div>
+        <div class="row"><label for="cov_ltv">Max LTV (%)</label><input id="cov_ltv" type="text" value="70" inputmode="decimal" /></div>
+
+        <div class="btns">
+          <button id="btnPdf">Экспорт в PDF (A4) — кредитный комитет</button>
+          <button class="secondary" id="btnDemo">Демо-набор</button>
+          <button class="secondary" id="btnReset">Сброс</button>
+        </div>
+
+        <div class="mini-note">
+          Банковский блок — упрощённый: CAPEX СМР распределяется равномерно по сроку строительства, “мягкие” затраты — равномерно в первые N месяцев, земля/комиссия — в 1-й месяц. Проценты капитализируются в долг до момента релиза эскроу, затем из релиза погашается долг.
+        </div>
+      </div>
+
+      <!-- RIGHT: RESULTS -->
+      <div class="card">
+        <h2>Результаты (экономика)</h2>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Показатель</th>
+              <th class="num">База</th>
+              <th class="num">Стресс</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Выручка</td><td class="num" id="rev">—</td><td class="num" id="rev_s">—</td></tr>
+            <tr><td>Итого СМР</td><td class="num" id="smr">—</td><td class="num" id="smr_s">—</td></tr>
+            <tr><td>Итого CAPEX (без % кредита)</td><td class="num" id="capex_no_int">—</td><td class="num" id="capex_no_int_s">—</td></tr>
+            <tr><td>Коммерческие расходы</td><td class="num" id="comm">—</td><td class="num" id="comm_s">—</td></tr>
+            <tr>
+              <td><b>Профит девелопера (после % кредита)</b></td>
+              <td class="num" id="profit"><b>—</b></td>
+              <td class="num" id="profit_s"><b>—</b></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="kpi">
+          <div class="k"><div class="t">СМР ₽/м² GBA</div><div class="v" id="smr_m2">—</div></div>
+          <div class="k"><div class="t">CAPEX ₽/м² NSA</div><div class="v" id="capex_m2">—</div></div>
+          <div class="k"><div class="t">Маржа девелопера</div><div class="v" id="margin_pct">—</div></div>
+          <div class="k"><div class="t">Запас к цене (₽/м² NSA)</div><div class="v" id="buffer">—</div></div>
+        </div>
+
+        <div class="flags" id="flagsEco"></div>
+
+        <div class="hr"></div>
+        <h2>Банк-KPI (DSCR / LTC / LTV)</h2>
+
+        <table>
+          <tbody>
+            <tr><th>Показатель</th><th class="num">База</th><th class="num">Стресс</th></tr>
+            <tr><td>Max Debt (пик задолженности)</td><td class="num" id="b_maxdebt">—</td><td class="num" id="b_maxdebt_s">—</td></tr>
+            <tr><td>Проценты по кредиту (капитализ.)</td><td class="num" id="b_int">—</td><td class="num" id="b_int_s">—</td></tr>
+            <tr><td>LTC = Max Debt / Total Cost</td><td class="num" id="b_ltc">—</td><td class="num" id="b_ltc_s">—</td></tr>
+            <tr><td>LTV = Max Debt / Revenue</td><td class="num" id="b_ltv">—</td><td class="num" id="b_ltv_s">—</td></tr>
+            <tr><td>Min DSCR (по месяцам релиза)</td><td class="num" id="b_dscr_min">—</td><td class="num" id="b_dscr_min_s">—</td></tr>
+            <tr><td>Avg DSCR (по месяцам релиза)</td><td class="num" id="b_dscr_avg">—</td><td class="num" id="b_dscr_avg_s">—</td></tr>
+          </tbody>
+        </table>
+
+        <div class="flags" id="flagsBank"></div>
+
+        <div class="hr"></div>
+        <h2>Чувствительность 5×5 (маржа девелопера, %)</h2>
+        <div class="small">Строки: изменение цены. Столбцы: изменение СМР. Цвет — уровень устойчивости.</div>
+        <div class="sens-wrap" id="sensitivity">—</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ---------- utils ----------
+    const $ = (id) => document.getElementById(id);
+
+    function parseNumber(v){
+      const s = String(v ?? "")
+        .replace(/[₽\u00A0\s]/g, "")
+        .replace(",", ".");
+      const x = Number(s);
+      return Number.isFinite(x) ? x : 0;
+    }
+    function fmtInt(x){ return Math.round(x).toLocaleString("ru-RU"); }
+    function rub(x){ return fmtInt(x) + " ₽"; }
+    function rubm2(x){ return fmtInt(x) + " ₽/м²"; }
+    function percent(x){
+      return (x*100).toLocaleString("ru-RU",{minimumFractionDigits:1, maximumFractionDigits:1}) + " %";
+    }
+    function xNum(x){
+      return (x).toLocaleString("ru-RU",{minimumFractionDigits:2, maximumFractionDigits:2}) + "x";
+    }
+    function get(id){ return parseNumber($(id).value); }
+
+    function setGeneratedAt(){
+      const d = new Date();
+      const pad = (n)=>String(n).padStart(2,"0");
+      $("generatedAt").textContent =
+        `${pad(d.getDate())}.${pad(d.getMonth()+1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    function marginClass(m){
+      if (m >= 0.18) return "margin-good";
+      if (m >= 0.10) return "margin-mid";
+      return "margin-bad";
+    }
+    function pill(type, text){
+      const div = document.createElement("div");
+      div.className = "pill";
+      const dot = document.createElement("span");
+      dot.className = "dot " + type;
+      const t = document.createElement("span");
+      t.textContent = text;
+      div.appendChild(dot); div.appendChild(t);
+      return div;
+    }
+
+    // ---------- core economics (without bank interest) ----------
+    function econScenario(priceMul, smrMul){
+      const gba = get("gba");
+      const nsa = get("nsa");
+      const price = get("price") * priceMul;
+
+      const directPerM2 = get("c1")+get("c2")+get("c3")+get("c4")+get("c5")+get("c6");
+      const direct = (gba * directPerM2 + get("lift")) * smrMul;
+
+      const overhead = direct * (get("overhead")/100);
+      const gpProfit = (direct + overhead) * (get("gp")/100);
+      const reserve = (direct + overhead + gpProfit) * (get("reserve")/100);
+
+      const smr = direct + overhead + gpProfit + reserve;
+
+      const capexNoInt = smr + get("land") + get("tu") + get("design") + get("bank_fee");
+
+      const revenue = nsa * price;
+      const commercial = revenue * (get("commercial")/100);
+
+      return { gba, nsa, price, revenue, direct, overhead, gpProfit, reserve, smr, capexNoInt, commercial };
+    }
+
+    // ---------- bank / escrow monthly simulation ----------
+    /*
+      Simplified logic:
+      - Timeline = constr_months + tail_months + escrow_release_months
+      - Sales value:
+          preSales = pre_sale_share% * total revenue, spread evenly across construction months
+          tailSales = (1 - pre) * total revenue, spread evenly across tail months AFTER commissioning
+      - Cash:
+          All sales receipts go to escrow (not usable) until commissioning.
+          Escrow releases accumulated escrow over escrow_release_months starting right after commissioning.
+          Tail sales after commissioning are assumed to be immediately available (no escrow) for simplicity:
+            (common simplification; if your bank keeps escrow after commissioning too — set pre_sale_share=100 and tail_months=0,
+             or you can modify logic).
+      - CAPEX:
+          SMR spread evenly over constr_months.
+          Land + bank_fee paid month 1.
+          TU + design spread evenly over first capex_soft_months.
+      - Financing:
+          Start cash = equity.
+          When cash deficit -> draw debt up to loan_limit.
+          Interest accrues monthly on opening debt balance and capitalized into debt until escrow release begins.
+          During release months, we use releases to pay interest due and principal; DSCR computed on those months:
+              CFADS = EscrowRelease + (TailSalesCash if any) - CommercialOut - RemainingCapexOut
+              DebtService = InterestPaid + PrincipalPaid
+              DSCR = CFADS / DebtService (if DebtService>0).
+    */
+    function bankScenario(priceMul, smrMul){
+      const econ = econScenario(priceMul, smrMul);
+
+      const constr = Math.max(1, Math.round(get("constr_months")));
+      const tail = Math.max(0, Math.round(get("tail_months")));
+      const rel = Math.max(1, Math.round(get("escrow_release_months")));
+      const softM = Math.max(1, Math.round(get("capex_soft_months")));
+
+      const equity = get("equity");
+      const loanLimit = get("loan_limit");
+      const rate = get("rate")/100;
+      const rMonthly = rate / 12;
+
+      const preShare = Math.min(100, Math.max(0, get("pre_sale_share"))) / 100;
+
+      const totalRevenue = econ.revenue;
+      const preRevenue = totalRevenue * preShare;
+      const tailRevenue = totalRevenue - preRevenue;
+
+      // sales schedule
+      const preSalesMonthly = preRevenue / constr;
+      const tailSalesMonthly = tail > 0 ? (tailRevenue / tail) : 0;
+
+      // escrow accumulation during construction
+      let escrowBal = 0;
+
+      // capex schedule
+      const smrMonthly = econ.smr / constr;
+      const landPay = get("land");
+      const bankFeePay = get("bank_fee");
+      const tuPay = get("tu");
+      const designPay = get("design");
+      const softMonthly = (tuPay + designPay) / softM;
+
+      // commercial schedule tied to sales (we assume paid when sales booked)
+      // allocate commercial proportionally to sales each month.
+      const commPct = get("commercial")/100;
+
+      // timeline length
+      const totalMonths = constr + tail + rel;
+
+      let cash = equity;
+      let debt = 0;
+      let maxDebt = 0;
+      let capIntTotal = 0;
+
+      let dscrMin = Infinity;
+      let dscrSum = 0;
+      let dscrCnt = 0;
+
+      // For DSCR: only compute during release months (months constr+1 .. constr+rel)
+      // We'll also allow tail sales cash to be available from month constr+1 onward.
+
+      // Track remaining debt for repayment during release
+      for (let m=1; m<=totalMonths; m++){
+        const inConstruction = m <= constr;
+        const inTail = (m > constr) && (m <= constr + tail);
+        const inRelease = (m > constr) && (m <= constr + rel);
+
+        // SALES
+        let sales = 0;
+        if (inConstruction){
+          sales = preSalesMonthly;
+          escrowBal += sales; // goes to escrow
+        } else if (inTail){
+          sales = tailSalesMonthly; // assume cash available (simplification)
+        }
+
+        // COMMERCIAL outflow as % of sales booked this month
+        const commOut = sales * commPct;
+
+        // CAPEX outflow this month
+        let capexOut = 0;
+        if (inConstruction){
+          capexOut += smrMonthly;
+        }
+        // land & bank fee month 1
+        if (m === 1){
+          capexOut += landPay + bankFeePay;
+        }
+        // soft costs evenly in first softM months
+        if (m <= softM){
+          capexOut += softMonthly;
+        }
+
+        // CASH INFLOW from escrow release
+        let escrowRelease = 0;
+        if (inRelease){
+          // release accumulated escrow over rel months
+          // at commissioning moment, escrowBal has accumulated all preSales
+          // we release evenly:
+          escrowRelease = preRevenue / rel;
+        }
+
+        // CASH inflow from tail sales assumed immediately available
+        const tailCashIn = (!inConstruction && inTail) ? sales : 0;
+
+        // Interest accrual
+        const interestAccrued = debt * rMonthly;
+
+        // During construction: interest capitalized into debt (common for project finance)
+        // During release months: interest is paid from available cash (we model as debt service).
+        let interestPaid = 0;
+        let principalPaid = 0;
+
+        // Apply cash flows (before debt service)
+        cash += escrowRelease + tailCashIn;
+        cash -= (capexOut + commOut);
+
+        if (inConstruction){
+          // Capitalize interest
+          debt += interestAccrued;
+          capIntTotal += interestAccrued;
+        } else {
+          // Pay interest if possible, otherwise capitalize remainder (conservative)
+          if (cash >= interestAccrued){
+            cash -= interestAccrued;
+            interestPaid = interestAccrued;
+          } else {
+            // pay what can, capitalize rest
+            interestPaid = Math.max(0, cash);
+            const short = interestAccrued - interestPaid;
+            cash = 0;
+            debt += short;
+            capIntTotal += short;
+          }
+        }
+
+        // If cash negative -> draw debt
+        if (cash < 0){
+          const need = -cash;
+          const draw = Math.min(need, Math.max(0, loanLimit - debt));
+          debt += draw;
+          cash += draw;
+          // If still negative => funding gap (we clamp at 0 but flag via debt > limit scenario)
+          if (cash < 0) cash = 0;
+        }
+
+        // During release: repay principal from remaining cash (after paying interest above)
+        if (inRelease){
+          if (cash > 0 && debt > 0){
+            principalPaid = Math.min(cash, debt);
+            debt -= principalPaid;
+            cash -= principalPaid;
+          }
+
+          const cfads = escrowRelease + tailCashIn - capexOut - commOut; // simplified CFADS
+          const debtService = interestPaid + principalPaid;
+
+          if (debtService > 0){
+            const dscr = cfads / debtService;
+            dscrMin = Math.min(dscrMin, dscr);
+            dscrSum += dscr;
+            dscrCnt += 1;
+          }
+        }
+
+        maxDebt = Math.max(maxDebt, debt);
+      }
+
+      if (dscrMin === Infinity) dscrMin = 0;
+      const dscrAvg = dscrCnt > 0 ? (dscrSum / dscrCnt) : 0;
+
+      // Total cost for LTC: capexNoInt + commercial + capitalized interest (more bank-like)
+      const totalCost = econ.capexNoInt + econ.commercial + capIntTotal;
+
+      const ltc = totalCost > 0 ? (maxDebt / totalCost) : 0;
+      const ltv = econ.revenue > 0 ? (maxDebt / econ.revenue) : 0;
+
+      // Developer profit after bank interest (approx): revenue - (capexNoInt + commercial + capitalized interest)
+      const devProfit = econ.revenue - (econ.capexNoInt + econ.commercial + capIntTotal);
+      const devMargin = econ.revenue !== 0 ? devProfit / econ.revenue : 0;
+
+      return {
+        econ,
+        capIntTotal,
+        maxDebt,
+        ltc,
+        ltv,
+        dscrMin,
+        dscrAvg,
+        devProfit,
+        devMargin
+      };
+    }
+
+    // ---------- sensitivity 5x5 (margin %) ----------
+    function renderSensitivity(){
+      const smrRange = [-0.10,-0.05,0,0.05,0.10];
+      const priceRange = [-0.10,-0.05,0,0.05,0.10];
+
+      let html = `<table class="sens-table"><thead><tr><th>Цена \\ СМР</th>`;
+      for (const s of smrRange) html += `<th>${(s*100).toLocaleString("ru-RU")}%</th>`;
+      html += `</tr></thead><tbody>`;
+
+      for (const p of priceRange){
+        html += `<tr><th>${(p*100).toLocaleString("ru-RU")}%</th>`;
+        for (const s of smrRange){
+          const b = bankScenario(1+p, 1+s);
+          const cls = marginClass(b.devMargin);
+          html += `<td class="${cls}">${percent(b.devMargin)}</td>`;
+        }
+        html += `</tr>`;
+      }
+      html += `</tbody></table>`;
+      $("sensitivity").innerHTML = html;
+    }
+
+    // ---------- flags ----------
+    function renderEcoFlags(baseBank, stressBank){
+      const el = $("flagsEco");
+      el.innerHTML = "";
+
+      const m = baseBank.devMargin;
+      el.appendChild(pill(baseBank.devProfit >= 0 ? "ok":"bad", baseBank.devProfit >= 0 ? "База: прибыль положительная" : "База: прибыль отрицательная"));
+      if (m >= 0.18) el.appendChild(pill("ok", `Маржа базы ${percent(m)} — высокий запас`));
+      else if (m >= 0.10) el.appendChild(pill("warn", `Маржа базы ${percent(m)} — средний запас`));
+      else el.appendChild(pill("bad", `Маржа базы ${percent(m)} — низкий запас`));
+
+      const ms = stressBank.devMargin;
+      el.appendChild(pill(stressBank.devProfit >= 0 ? "ok":"bad", stressBank.devProfit >= 0 ? "Стресс: прибыль положительная" : "Стресс: прибыль отрицательная"));
+      if (ms < 0.10) el.appendChild(pill("bad", `Стресс-маржа ${percent(ms)} — критично`));
+
+      // sanity checks
+      const gba = get("gba"), nsa = get("nsa");
+      if (gba <= 0 || nsa <= 0) el.appendChild(pill("bad", "Площади: GBA/NSA должны быть > 0"));
+      if (nsa > gba) el.appendChild(pill("warn", "NSA > GBA — проверьте ввод"));
+    }
+
+    function renderBankFlags(baseBank, stressBank){
+      const el = $("flagsBank");
+      el.innerHTML = "";
+
+      const covD = get("cov_dscr");
+      const covLTC = get("cov_ltc")/100;
+      const covLTV = get("cov_ltv")/100;
+
+      // Base covenants
+      el.appendChild(pill(
+        baseBank.dscrMin >= covD ? "ok" : "bad",
+        `DSCR min (база): ${xNum(baseBank.dscrMin)} vs cov ${xNum(covD)}`
+      ));
+      el.appendChild(pill(
+        baseBank.ltc <= covLTC ? "ok" : "bad",
+        `LTC (база): ${percent(baseBank.ltc)} vs cov ${percent(covLTC)}`
+      ));
+      el.appendChild(pill(
+        baseBank.ltv <= covLTV ? "ok" : "bad",
+        `LTV (база): ${percent(baseBank.ltv)} vs cov ${percent(covLTV)}`
+      ));
+
+      // Stress covenants
+      el.appendChild(pill(
+        stressBank.dscrMin >= covD ? "ok" : "bad",
+        `DSCR min (стресс): ${xNum(stressBank.dscrMin)}`
+      ));
+      el.appendChild(pill(
+        stressBank.ltc <= covLTC ? "ok" : "bad",
+        `LTC (стресс): ${percent(stressBank.ltc)}`
+      ));
+      el.appendChild(pill(
+        stressBank.ltv <= covLTV ? "ok" : "bad",
+        `LTV (стресс): ${percent(stressBank.ltv)}`
+      ));
+
+      // Limit check
+      const loanLimit = get("loan_limit");
+      if (baseBank.maxDebt > loanLimit) el.appendChild(pill("bad", "Пик долга (база) превышает лимит кредита"));
+      else el.appendChild(pill("ok", "Пик долга (база) в пределах лимита"));
+
+      if (stressBank.maxDebt > loanLimit) el.appendChild(pill("bad", "Пик долга (стресс) превышает лимит кредита"));
+      else el.appendChild(pill("ok", "Пик долга (стресс) в пределах лимита"));
+    }
+
+    // ---------- render ----------
+    function calcAndRender(){
+      setGeneratedAt();
+
+      // Base & Stress via bankScenario (includes interest)
+      const base = bankScenario(1,1);
+      const stress = bankScenario(1 + get("stress_price")/100, 1 + get("stress_smr")/100);
+
+      // Economy display
+      $("rev").textContent = rub(base.econ.revenue);
+      $("rev_s").textContent = rub(stress.econ.revenue);
+
+      $("smr").textContent = rub(base.econ.smr);
+      $("smr_s").textContent = rub(stress.econ.smr);
+
+      $("capex_no_int").textContent = rub(base.econ.capexNoInt);
+      $("capex_no_int_s").textContent = rub(stress.econ.capexNoInt);
+
+      $("comm").textContent = rub(base.econ.commercial);
+      $("comm_s").textContent = rub(stress.econ.commercial);
+
+      $("profit").textContent = rub(base.devProfit);
+      $("profit_s").textContent = rub(stress.devProfit);
+
+      $("profit").className = "num " + marginClass(base.devMargin);
+      $("profit_s").className = "num " + marginClass(stress.devMargin);
+
+      // KPI
+      $("smr_m2").textContent = base.econ.gba ? rubm2(base.econ.smr / base.econ.gba) : "—";
+      const totalCostBase = base.econ.capexNoInt + base.econ.commercial + base.capIntTotal;
+      $("capex_m2").textContent = base.econ.nsa ? rubm2(totalCostBase / base.econ.nsa) : "—";
+      $("margin_pct").textContent = percent(base.devMargin);
+      $("margin_pct").className = "v " + marginClass(base.devMargin);
+      $("buffer").textContent = base.econ.nsa ? rubm2(base.econ.price - (totalCostBase / base.econ.nsa)) : "—";
+
+      // Bank KPI
+      $("b_maxdebt").textContent = rub(base.maxDebt);
+      $("b_maxdebt_s").textContent = rub(stress.maxDebt);
+
+      $("b_int").textContent = rub(base.capIntTotal);
+      $("b_int_s").textContent = rub(stress.capIntTotal);
+
+      $("b_ltc").textContent = percent(base.ltc);
+      $("b_ltc_s").textContent = percent(stress.ltc);
+
+      $("b_ltv").textContent = percent(base.ltv);
+      $("b_ltv_s").textContent = percent(stress.ltv);
+
+      $("b_dscr_min").textContent = xNum(base.dscrMin);
+      $("b_dscr_min_s").textContent = xNum(stress.dscrMin);
+
+      $("b_dscr_avg").textContent = xNum(base.dscrAvg);
+      $("b_dscr_avg_s").textContent = xNum(stress.dscrAvg);
+
+      renderEcoFlags(base, stress);
+      renderBankFlags(base, stress);
+      renderSensitivity();
+    }
+
+    // ---------- input masking ----------
+    const PERCENT_IDS = new Set([
+      "overhead","gp","reserve","commercial","stress_price","stress_smr",
+      "rate","pre_sale_share","cov_ltc","cov_ltv"
+    ]);
+    const DECIMAL_IDS = new Set([
+      "cov_dscr" // allow 1.20
+    ]);
+
+    function attachInputMask(id){
+      const el = $(id);
+
+      el.addEventListener("focus", () => {
+        el.value = String(parseNumber(el.value));
+      });
+
+      el.addEventListener("blur", () => {
+        const v = parseNumber(el.value);
+        if (PERCENT_IDS.has(id) || DECIMAL_IDS.has(id)){
+          el.value = v.toLocaleString("ru-RU",{maximumFractionDigits:2});
+        } else {
+          el.value = fmtInt(v);
+        }
+        calcAndRender();
+      });
+
+      el.addEventListener("input", () => calcAndRender());
+
+      // initial format
+      const init = parseNumber(el.value);
+      if (PERCENT_IDS.has(id) || DECIMAL_IDS.has(id)){
+        el.value = init.toLocaleString("ru-RU",{maximumFractionDigits:2});
+      } else {
+        el.value = fmtInt(init);
+      }
+    }
+
+    // ---------- PDF export ----------
+    async function exportPdf(){
+      if (typeof html2canvas === "undefined" || typeof window.jspdf === "undefined"){
+        alert("Не найдены html2canvas/jspdf. Проверьте ./vendor/html2canvas.min.js и ./vendor/jspdf.umd.min.js");
+        return;
+      }
+      document.body.classList.add("export-mode");
+      await new Promise(r => setTimeout(r, 120));
+
+      const root = document.getElementById("reportRoot");
+      const canvas = await html2canvas(root, { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
+      const imgData = canvas.toDataURL("image/png");
+
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({ orientation: "p", unit: "mm", format: "a4" });
+
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+
+      const imgWidth = pageWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      let y = 0;
+      let remaining = imgHeight;
+
+      if (imgHeight <= pageHeight){
+        pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight);
+      } else {
+        while (remaining > 0){
+          pdf.addImage(imgData, "PNG", 0, -y, imgWidth, imgHeight);
+          remaining -= pageHeight;
+          y += pageHeight;
+          if (remaining > 0) pdf.addPage();
+        }
+      }
+
+      const now = new Date();
+      const pad = (n)=>String(n).padStart(2,"0");
+      const fname = `MKD_CC_${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}.pdf`;
+      pdf.save(fname);
+
+      document.body.classList.remove("export-mode");
+    }
+
+    // ---------- init / demo ----------
+    function init(){
+      const ids = [
+        "gba","nsa","price",
+        "c1","c2","c3","c4","c5","c6","lift",
+        "overhead","gp","reserve",
+        "land","tu","design","bank_fee",
+        "commercial","stress_price","stress_smr",
+        "equity","loan_limit","rate",
+        "constr_months","tail_months","pre_sale_share","escrow_release_months","capex_soft_months",
+        "cov_dscr","cov_ltc","cov_ltv"
+      ];
+      ids.forEach(attachInputMask);
+
+      $("btnPdf").addEventListener("click", exportPdf);
+      $("btnReset").addEventListener("click", () => window.location.reload());
+
+      $("btnDemo").addEventListener("click", () => {
+        $("gba").value = "24 000";
+        $("nsa").value = "16 800";
+        $("price").value = "145 000";
+
+        $("c1").value = "22 500";
+        $("c2").value = "7 000";
+        $("c3").value = "12 500";
+        $("c4").value = "8 500";
+        $("c5").value = "3 800";
+        $("c6").value = "2 600";
+        $("lift").value = "52 000 000";
+
+        $("overhead").value = "10";
+        $("gp").value = "5";
+        $("reserve").value = "2";
+
+        $("land").value = "220 000 000";
+        $("tu").value = "140 000 000";
+        $("design").value = "40 000 000";
+        $("bank_fee").value = "25 000 000";
+
+        $("commercial").value = "3";
+        $("stress_price").value = "-10";
+        $("stress_smr").value = "15";
+
+        $("equity").value = "350 000 000";
+        $("loan_limit").value = "2 100 000 000";
+        $("rate").value = "18";
+
+        $("constr_months").value = "24";
+        $("tail_months").value = "6";
+        $("pre_sale_share").value = "80";
+        $("escrow_release_months").value = "3";
+        $("capex_soft_months").value = "6";
+
+        $("cov_dscr").value = "1.20";
+        $("cov_ltc").value = "80";
+        $("cov_ltv").value = "70";
+
+        // Reformat by simulating blur (simple way: call init again)
+        init();
+      });
+
+      calcAndRender();
+    }
+
+    window.addEventListener("DOMContentLoaded", init);
+  </script>
+</body>
+</html>
